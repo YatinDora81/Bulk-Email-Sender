@@ -1,0 +1,37 @@
+// Prisma schema — Bulk Email Sender
+// Datasource URL is provided via prisma.config.ts (env DATABASE_URL).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EmailStatus {
+  pending
+  sent
+  failed
+}
+
+model Contact {
+  id               String      @id @default(cuid())
+  sno              Int         @default(0)
+  name             String
+  email            String      @unique
+  title            String
+  company          String
+  status           EmailStatus @default(pending)
+  generatedSubject String?
+  generatedBody    String?
+  sentAt           DateTime?
+  error            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([status])
+  @@index([updatedAt(sort: Desc)])
+  @@index([company])
+}
