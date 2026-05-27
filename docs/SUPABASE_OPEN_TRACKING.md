@@ -65,8 +65,8 @@ supabase functions deploy track-open --no-verify-jwt
 ### 4. Add to `.env`
 
 ```env
-SUPABASE_URL="https://gvueenebbeqvkfisaltc.supabase.co"
-SUPABASE_PROJECT_REF="gvueenebbeqvkfisaltc"
+SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co"
+SUPABASE_PROJECT_REF="YOUR_PROJECT_REF"
 SUPABASE_SERVICE_ROLE_KEY="paste-service-role-key-here"
 TRACKING_ENABLED=true
 ```

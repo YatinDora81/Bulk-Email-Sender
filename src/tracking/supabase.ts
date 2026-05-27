@@ -62,7 +62,7 @@ export async function checkTrackingPixelEndpoint(): Promise<{
         ok: false,
         status: 404,
         hint:
-          "track-open Edge Function not deployed. Run: bunx supabase login && bunx supabase functions deploy track-open --project-ref gvueenebbeqvkfisaltc --no-verify-jwt",
+          "track-open Edge Function not deployed. Run: bun run deploy:tracking (needs SUPABASE_PROJECT_REF in .env and `bunx supabase login`).",
       };
     }
     return { ok: res.ok, status: res.status };

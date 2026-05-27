@@ -1,4 +1,4 @@
-# Supabase local config — project linked via: supabase link --project-ref gvueenebbeqvkfisaltc
+# Supabase local config — link via: supabase link --project-ref <your project ref>
 
 [api]
 enabled = true

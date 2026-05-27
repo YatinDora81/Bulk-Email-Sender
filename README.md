@@ -247,7 +247,7 @@ DEBUG=false
 STORAGE_BACKENDS=sheet
 
 # Google Sheet (required when sheet backend is enabled)
-GOOGLE_SHEET_ID=1CWk9gyU0ZIHMxrl-9WjzJaV_nSiC0LkPmV_Aq3V2lt8
+GOOGLE_SHEET_ID=YOUR_GOOGLE_SHEET_ID
 GOOGLE_SHEET_TAB=Contacts
 
 # Google service account credentials (paste from service-account JSON file)

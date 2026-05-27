@@ -6,7 +6,11 @@
 import { spawnSync } from "child_process";
 import { checkTrackingPixelEndpoint } from "../src/tracking/supabase";
 
-const projectRef = process.env.SUPABASE_PROJECT_REF || "gvueenebbeqvkfisaltc";
+const projectRef = process.env.SUPABASE_PROJECT_REF;
+if (!projectRef) {
+  console.error("❌ Set SUPABASE_PROJECT_REF in .env (Supabase Dashboard → Project Settings → General).");
+  process.exit(1);
+}
 
 function run(cmd: string, args: string[]): number {
   console.log(`\n> ${cmd} ${args.join(" ")}\n`);
