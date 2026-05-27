@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { getGemini } from "../config/gemini";
-import { sendEmail } from "../config/mailer";
+import { sendTrackedEmail } from "../services/tracked-email.service";
 import { getStorage } from "../storage";
 import { EMAIL_SYSTEM_PROMPT, buildEmailPrompt } from "../utils/prompt";
 import { parseExcelFile } from "../services/excel.service";
@@ -45,7 +45,11 @@ export async function sendOne(req: Request, res: Response) {
       return;
     }
 
-    await sendEmail({ to: email, subject: emailData.subject, html: emailData.body });
+    const { messageId, trackingEnabled } = await sendTrackedEmail({
+      to: email,
+      subject: emailData.subject,
+      html: emailData.body,
+    });
 
     const storage = getStorage();
     await storage.upsertSentContact({
@@ -61,7 +65,13 @@ export async function sendOne(req: Request, res: Response) {
     });
 
     logger.info(`Sent to ${email}`);
-    res.json({ ok: true, to: email, subject: emailData.subject, body: emailData.body });
+    res.json({
+      ok: true,
+      to: email,
+      subject: emailData.subject,
+      body: emailData.body,
+      tracking: trackingEnabled ? { messageId } : null,
+    });
   } catch (error: unknown) {
     logger.error(`Send failed: ${error instanceof Error ? error.message : error}`);
     res.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });

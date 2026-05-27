@@ -1,4 +1,8 @@
-import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet, GoogleSpreadsheetRow } from "google-spreadsheet";
+import {
+  GoogleSpreadsheet,
+  GoogleSpreadsheetWorksheet,
+  GoogleSpreadsheetRow,
+} from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 import { logger } from "../utils/logger";
 import {
@@ -41,6 +45,8 @@ function rowToContact(row: GoogleSpreadsheetRow): Contact {
     title: get("title"),
     company: get("company"),
     status: (get("status") || "pending") as Contact["status"],
+    openCount: Number(get("openCount") || 0) || 0,
+    lastOpenedAt: parseDate(get("lastOpenedAt")),
     generatedSubject: get("generatedSubject") || undefined,
     generatedBody: get("generatedBody") || undefined,
     sentAt: parseDate(get("sentAt")),
@@ -58,6 +64,8 @@ function contactToRow(c: Contact): Record<string, string | number> {
     title: c.title,
     company: c.company,
     status: c.status,
+    openCount: c.openCount ?? 0,
+    lastOpenedAt: c.lastOpenedAt ? c.lastOpenedAt.toISOString() : "",
     generatedSubject: c.generatedSubject ?? "",
     generatedBody: c.generatedBody ?? "",
     sentAt: c.sentAt ? c.sentAt.toISOString() : "",
@@ -78,15 +86,23 @@ export class SheetStorage implements IStorage {
     if (this.initialized) return;
 
     const sheetId = process.env.GOOGLE_SHEET_ID;
-    const clientEmail = process.env.client_email || process.env.GOOGLE_CLIENT_EMAIL;
-    const privateKeyRaw = process.env.private_key || process.env.GOOGLE_PRIVATE_KEY;
+    const clientEmail =
+      process.env.client_email || process.env.GOOGLE_CLIENT_EMAIL;
+    const privateKeyRaw =
+      process.env.private_key || process.env.GOOGLE_PRIVATE_KEY;
 
     if (!sheetId) throw new Error("Missing GOOGLE_SHEET_ID env var");
-    if (!clientEmail) throw new Error("Missing client_email env var (Google service account)");
-    if (!privateKeyRaw) throw new Error("Missing private_key env var (Google service account)");
+    if (!clientEmail)
+      throw new Error("Missing client_email env var (Google service account)");
+    if (!privateKeyRaw)
+      throw new Error("Missing private_key env var (Google service account)");
 
     const privateKey = privateKeyRaw.replace(/\\n/g, "\n");
-    const jwt = new JWT({ email: clientEmail, key: privateKey, scopes: SCOPES });
+    const jwt = new JWT({
+      email: clientEmail,
+      key: privateKey,
+      scopes: SCOPES,
+    });
 
     this.doc = new GoogleSpreadsheet(sheetId, jwt);
     await this.doc.loadInfo();
@@ -105,14 +121,20 @@ export class SheetStorage implements IStorage {
         const missing = CONTACT_HEADERS.filter((h) => !existing.includes(h));
         if (missing.length > 0 || existing.length === 0) {
           if (sheet.columnCount < CONTACT_HEADERS.length) {
-            await sheet.resize({ rowCount: sheet.rowCount || 1000, columnCount: CONTACT_HEADERS.length });
+            await sheet.resize({
+              rowCount: sheet.rowCount || 1000,
+              columnCount: CONTACT_HEADERS.length,
+            });
           }
           await sheet.setHeaderRow([...CONTACT_HEADERS]);
           logger.info(`[Sheet] Reset header row on "${TAB_NAME}"`);
         }
       } catch {
         if (sheet.columnCount < CONTACT_HEADERS.length) {
-          await sheet.resize({ rowCount: sheet.rowCount || 1000, columnCount: CONTACT_HEADERS.length });
+          await sheet.resize({
+            rowCount: sheet.rowCount || 1000,
+            columnCount: CONTACT_HEADERS.length,
+          });
         }
         await sheet.setHeaderRow([...CONTACT_HEADERS]);
       }
@@ -128,12 +150,15 @@ export class SheetStorage implements IStorage {
       this.cache.set(contact.email, { row, contact });
     }
 
-    logger.info(`[Sheet] Loaded ${this.cache.size} contacts from "${TAB_NAME}"`);
+    logger.info(
+      `[Sheet] Loaded ${this.cache.size} contacts from "${TAB_NAME}"`,
+    );
     this.initialized = true;
   }
 
   private requireSheet(): GoogleSpreadsheetWorksheet {
-    if (!this.sheet) throw new Error("SheetStorage not initialized — call init() first");
+    if (!this.sheet)
+      throw new Error("SheetStorage not initialized — call init() first");
     return this.sheet;
   }
 
@@ -150,6 +175,7 @@ export class SheetStorage implements IStorage {
       title: input.title,
       company: input.company,
       status: "pending",
+      openCount: 0,
       createdAt: now,
       updatedAt: now,
     };
@@ -159,7 +185,9 @@ export class SheetStorage implements IStorage {
     return { inserted: true };
   }
 
-  async upsertSentContact(input: NewContactInput & ContactUpdate): Promise<void> {
+  async upsertSentContact(
+    input: NewContactInput & ContactUpdate,
+  ): Promise<void> {
     const email = input.email.toLowerCase();
     const existing = this.cache.get(email);
     if (existing) {
@@ -205,6 +233,7 @@ export class SheetStorage implements IStorage {
     const updated: Contact = {
       ...cached.contact,
       ...update,
+      openCount: update.openCount ?? cached.contact.openCount ?? 0,
       updatedAt: new Date(),
     };
 
@@ -232,7 +261,9 @@ export class SheetStorage implements IStorage {
           );
         })
       : all;
-    const filtered = filter.status ? searched.filter((c) => c.status === filter.status) : searched;
+    const filtered = filter.status
+      ? searched.filter((c) => c.status === filter.status)
+      : searched;
     filtered.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
     const total = filtered.length;
@@ -242,7 +273,9 @@ export class SheetStorage implements IStorage {
   }
 
   async getStats(): Promise<Stats> {
-    let sent = 0, failed = 0, pending = 0;
+    let sent = 0,
+      failed = 0,
+      pending = 0;
     for (const { contact } of this.cache.values()) {
       if (contact.status === "sent") sent++;
       else if (contact.status === "failed") failed++;

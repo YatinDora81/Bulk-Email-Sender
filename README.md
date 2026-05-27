@@ -2,6 +2,16 @@
 
 AI-driven bulk email sender that reads contacts from an Excel file, generates personalized cold emails using Google Gemini, and sends them via Gmail SMTP with resume attached. Storage is **pluggable** — Google Sheet (default), MongoDB, and Prisma/Postgres can be enabled together or independently via a single env var.
 
+> **Commands (in depth):** see **[commands.readme](./commands.readme)** — what `clear`, `send`, `sync`, `deploy:tracking`, etc. do step-by-step.
+
+### Daily CLI loop
+
+```bash
+bun run clear    # sheet + Supabase tracking
+bun run send     # Excel → Gemini → SMTP → sheet
+bun run sync     # Supabase open counts → sheet
+```
+
 ## Tech Stack
 
 - **Runtime:** Bun

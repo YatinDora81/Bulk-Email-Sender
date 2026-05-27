@@ -7,6 +7,8 @@ export interface Contact {
   title: string;
   company: string;
   status: ContactStatus;
+  openCount?: number;
+  lastOpenedAt?: Date;
   generatedSubject?: string;
   generatedBody?: string;
   sentAt?: Date;
@@ -25,6 +27,8 @@ export interface NewContactInput {
 
 export interface ContactUpdate {
   status?: ContactStatus;
+  openCount?: number;
+  lastOpenedAt?: Date;
   generatedSubject?: string;
   generatedBody?: string;
   sentAt?: Date;
@@ -74,6 +78,8 @@ export const CONTACT_HEADERS = [
   "title",
   "company",
   "status",
+  "openCount",
+  "lastOpenedAt",
   "generatedSubject",
   "generatedBody",
   "sentAt",

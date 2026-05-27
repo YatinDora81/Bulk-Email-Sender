@@ -1,7 +1,13 @@
 import { getStorage } from "../storage";
 import { getGemini } from "../config/gemini";
-import { sendEmail } from "../config/mailer";
+import { sendTrackedEmail } from "./tracked-email.service";
+import { syncOpenTrackingToStorage } from "./tracking-sync.service";
 import { EMAIL_SYSTEM_PROMPT, buildEmailPrompt } from "../utils/prompt";
+import {
+  startTrackingSyncScheduler,
+  stopTrackingSyncScheduler,
+} from "../tracking/sync-scheduler";
+import { isSupabaseTrackingEnabled } from "../tracking/supabase";
 import { logger } from "../utils/logger";
 
 export interface CampaignStatus {
@@ -47,10 +53,14 @@ class CampaignManager {
     this.startedAt = new Date();
     this.currentBatch = 0;
     this.running = true;
+    if (isSupabaseTrackingEnabled() && process.env.TRACKING_SYNC_ENABLED !== "false") {
+      startTrackingSyncScheduler();
+    }
     this.run().catch((err) => {
       logger.error("[Campaign] Fatal error:", err);
       this._status = "stopped";
       this.running = false;
+      stopTrackingSyncScheduler();
     });
     return { ok: true };
   }
@@ -156,7 +166,7 @@ class CampaignManager {
             throw new Error("Missing subject or body in Gemini response");
           }
 
-          await sendEmail({
+          await sendTrackedEmail({
             to: contact.email,
             subject: emailData.subject,
             html: emailData.body,
@@ -189,6 +199,17 @@ class CampaignManager {
     }
 
     this.running = false;
+    stopTrackingSyncScheduler();
+    if (isSupabaseTrackingEnabled()) {
+      try {
+        const result = await syncOpenTrackingToStorage();
+        logger.info(`[Campaign] Final open sync — updated=${result.updated}`);
+      } catch (error) {
+        logger.warn(
+          `[Campaign] Final open sync failed: ${error instanceof Error ? error.message : error}`,
+        );
+      }
+    }
     logger.info(`[Campaign] Finished. Status: ${this._status}`);
   }
 }

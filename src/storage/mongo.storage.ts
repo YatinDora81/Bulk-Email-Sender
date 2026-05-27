@@ -11,7 +11,10 @@ import type {
   UpsertResult,
 } from "./types";
 
-interface MongoContact extends Omit<Contact, "sentAt" | "createdAt" | "updatedAt"> {
+interface MongoContact extends Omit<
+  Contact,
+  "sentAt" | "createdAt" | "updatedAt"
+> {
   sentAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -49,19 +52,27 @@ export class MongoStorage implements IStorage {
         ...input,
         email: input.email.toLowerCase(),
         status: "pending",
+        openCount: 0,
         createdAt: now,
         updatedAt: now,
       });
       return { inserted: true };
     } catch (error: unknown) {
-      if (error && typeof error === "object" && "code" in error && (error as { code: number }).code === 11000) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code: number }).code === 11000
+      ) {
         return { inserted: false };
       }
       throw error;
     }
   }
 
-  async upsertSentContact(input: NewContactInput & ContactUpdate): Promise<void> {
+  async upsertSentContact(
+    input: NewContactInput & ContactUpdate,
+  ): Promise<void> {
     const col = this.require();
     const now = new Date();
     const email = input.email.toLowerCase();
@@ -83,7 +94,7 @@ export class MongoStorage implements IStorage {
         },
         $setOnInsert: { createdAt: now },
       },
-      { upsert: true }
+      { upsert: true },
     );
   }
 
@@ -91,7 +102,7 @@ export class MongoStorage implements IStorage {
     const col = this.require();
     await col.updateOne(
       { email: email.toLowerCase() },
-      { $set: { ...update, updatedAt: new Date() } }
+      { $set: { ...update, updatedAt: new Date() } },
     );
   }
 
@@ -114,7 +125,12 @@ export class MongoStorage implements IStorage {
     if (filter.status) q.status = filter.status;
 
     const [docs, total] = await Promise.all([
-      col.find(q).sort({ updatedAt: -1 }).skip((filter.page - 1) * filter.limit).limit(filter.limit).toArray(),
+      col
+        .find(q)
+        .sort({ updatedAt: -1 })
+        .skip((filter.page - 1) * filter.limit)
+        .limit(filter.limit)
+        .toArray(),
       col.countDocuments(q),
     ]);
     return { data: docs.map((d) => this.toContact(d)), total };
@@ -151,6 +167,8 @@ export class MongoStorage implements IStorage {
       title: d.title,
       company: d.company,
       status: d.status,
+      openCount: d.openCount ?? 0,
+      lastOpenedAt: d.lastOpenedAt,
       generatedSubject: d.generatedSubject,
       generatedBody: d.generatedBody,
       sentAt: d.sentAt,

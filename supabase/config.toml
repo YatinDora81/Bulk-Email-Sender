@@ -1,0 +1,11 @@
+# Supabase local config — project linked via: supabase link --project-ref gvueenebbeqvkfisaltc
+
+[api]
+enabled = true
+
+[db]
+port = 54322
+major_version = 17
+
+[functions.track-open]
+verify_jwt = false

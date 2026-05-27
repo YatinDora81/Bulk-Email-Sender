@@ -1,7 +1,9 @@
 import { getStorage } from "./storage";
 import type { Contact } from "./storage";
 import { getGemini } from "./config/gemini";
-import { sendEmail, verifySmtp } from "./config/mailer";
+import { verifySmtp } from "./config/mailer";
+import { sendTrackedEmail } from "./services/tracked-email.service";
+import { checkTrackingPixelEndpoint, isSupabaseTrackingEnabled } from "./tracking/supabase";
 import { parseExcelFile, type RawContact } from "./services/excel.service";
 import { EMAIL_SYSTEM_PROMPT, buildEmailPrompt } from "./utils/prompt";
 import { logger } from "./utils/logger";
@@ -137,7 +139,7 @@ async function processContact(
 
   logger.info(`${prefix} Sending email via SMTP to ${contact.email}...`);
   const sendStart = Date.now();
-  await sendEmail({ to: contact.email, subject: emailData.subject, html: emailData.body });
+  await sendTrackedEmail({ to: contact.email, subject: emailData.subject, html: emailData.body });
   logger.info(`${prefix} Email sent successfully in ${elapsed(sendStart)}`);
 
   logger.info(`${prefix} Updating storage status to "sent"...`);
@@ -253,12 +255,36 @@ async function main() {
   logger.info("[Main] Initializing Gemini AI client...");
   getGemini();
   logger.info("[Main] Gemini client ready");
+  const trackingOn = isSupabaseTrackingEnabled();
+  logger.info(
+    `[Main] Open tracking: ${
+      trackingOn ? "ON (Supabase)" : "OFF — set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY"
+    }`
+  );
+
+  if (trackingOn) {
+    const pixelCheck = await checkTrackingPixelEndpoint();
+    if (!pixelCheck.ok) {
+      logger.error(
+        `[Main] ⚠ Tracking pixel endpoint returned ${pixelCheck.status} — opens will NOT be counted until fixed.`,
+      );
+      logger.error(`[Main] ${pixelCheck.hint || "Deploy track-open or set TRACKING_PIXEL_BASE_URL to a public URL."}`);
+      logger.error(
+        "[Main] Gmail: recipient must tap “Display images” for the pixel to load.",
+      );
+    } else {
+      logger.info(`[Main] Tracking pixel endpoint OK (${pixelCheck.status})`);
+    }
+  }
 
   const contacts = loadData();
   const pending = await syncAndFilter(contacts);
   await runBatches(pending);
 
   divider("ALL DONE");
+  if (trackingOn) {
+    logger.info("[Main] After recipients open emails (Display images in Gmail), run: bun run sync");
+  }
   logger.info(`[Main] Finished at ${new Date().toISOString()}`);
   logger.info(`[Main] Total runtime: ${elapsed(mainStart)}`);
   process.exit(0);

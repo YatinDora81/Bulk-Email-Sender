@@ -24,6 +24,8 @@ model Contact {
   title            String
   company          String
   status           EmailStatus @default(pending)
+  openCount        Int         @default(0)
+  lastOpenedAt     DateTime?
   generatedSubject String?
   generatedBody    String?
   sentAt           DateTime?

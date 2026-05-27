@@ -36,14 +36,14 @@ export class StorageManager implements IStorage {
 
     if (requested.length === 0) {
       throw new Error(
-        `Empty STORAGE_BACKENDS. Set to one or more of: sheet, mongo, prisma (comma-separated)`
+        `Empty STORAGE_BACKENDS. Set to one or more of: sheet, mongo, prisma (comma-separated)`,
       );
     }
 
     const invalid = requested.filter((b) => !(b in BACKEND_FACTORIES));
     if (invalid.length > 0) {
       throw new Error(
-        `Invalid STORAGE_BACKENDS entries: ${invalid.join(", ")}. Allowed: sheet, mongo, prisma`
+        `Invalid STORAGE_BACKENDS entries: ${invalid.join(", ")}. Allowed: sheet, mongo, prisma`,
       );
     }
 
@@ -59,11 +59,19 @@ export class StorageManager implements IStorage {
 
     logger.info("[Storage] ════════════════════════════════════════════");
     logger.info(`[Storage] Configured: ${requested.join(", ")}`);
-    logger.info(`[Storage] Primary: ${primaryName}${mirrorNames.length > 0 ? ` | Mirrors: ${mirrorNames.join(", ")}` : ""}`);
+    logger.info(
+      `[Storage] Primary: ${primaryName}${mirrorNames.length > 0 ? ` | Mirrors: ${mirrorNames.join(", ")}` : ""}`,
+    );
     logger.info("[Storage] Running preflight checks...");
     logger.info("[Storage] ────────────────────────────────────────────");
 
-    type Probe = { name: BackendName; instance: IStorage; ok: boolean; ms: number; error?: string };
+    type Probe = {
+      name: BackendName;
+      instance: IStorage;
+      ok: boolean;
+      ms: number;
+      error?: string;
+    };
     const probes: Probe[] = [];
 
     for (const name of requested) {
@@ -77,7 +85,9 @@ export class StorageManager implements IStorage {
       } catch (error) {
         const ms = Date.now() - start;
         const message = error instanceof Error ? error.message : String(error);
-        logger.error(`[Storage]   ✗ ${name.padEnd(7)} FAILED (${ms}ms) — ${message}`);
+        logger.error(
+          `[Storage]   ✗ ${name.padEnd(7)} FAILED (${ms}ms) — ${message}`,
+        );
         probes.push({ name, instance, ok: false, ms, error: message });
       }
     }
@@ -86,31 +96,48 @@ export class StorageManager implements IStorage {
 
     const primaryProbe = probes[0]!;
     if (!primaryProbe.ok) {
-      logger.error(`[Storage] Aborting: primary backend "${primaryProbe.name}" is unavailable.`);
-      logger.error(`[Storage] Fix the issue above or change STORAGE_BACKENDS in .env`);
+      logger.error(
+        `[Storage] Aborting: primary backend "${primaryProbe.name}" is unavailable.`,
+      );
+      logger.error(
+        `[Storage] Fix the issue above or change STORAGE_BACKENDS in .env`,
+      );
       throw new Error(
-        `Primary storage backend "${primaryProbe.name}" failed preflight: ${primaryProbe.error}`
+        `Primary storage backend "${primaryProbe.name}" failed preflight: ${primaryProbe.error}`,
       );
     }
 
     this.primary = primaryProbe.instance;
-    this.mirrors = probes.slice(1).filter((p) => p.ok).map((p) => p.instance);
+    this.mirrors = probes
+      .slice(1)
+      .filter((p) => p.ok)
+      .map((p) => p.instance);
 
-    const skipped = probes.slice(1).filter((p) => !p.ok).map((p) => p.name);
+    const skipped = probes
+      .slice(1)
+      .filter((p) => !p.ok)
+      .map((p) => p.name);
     if (skipped.length > 0) {
-      logger.warn(`[Storage] Skipping unavailable mirrors: ${skipped.join(", ")}`);
+      logger.warn(
+        `[Storage] Skipping unavailable mirrors: ${skipped.join(", ")}`,
+      );
     }
 
     logger.info(
       `[Storage] Ready — using "${this.primary.name}" as primary` +
-        (this.mirrors.length > 0 ? ` with mirrors: ${this.mirrors.map((m) => m.name).join(", ")}` : " (no mirrors)")
+        (this.mirrors.length > 0
+          ? ` with mirrors: ${this.mirrors.map((m) => m.name).join(", ")}`
+          : " (no mirrors)"),
     );
     logger.info("[Storage] ════════════════════════════════════════════");
 
     this.initialized = true;
   }
 
-  private async fanOut(label: string, fn: (s: IStorage) => Promise<unknown>): Promise<void> {
+  private async fanOut(
+    label: string,
+    fn: (s: IStorage) => Promise<unknown>,
+  ): Promise<void> {
     if (this.mirrors.length === 0) return;
     const results = await Promise.allSettled(this.mirrors.map((m) => fn(m)));
     results.forEach((r, i) => {
@@ -119,7 +146,7 @@ export class StorageManager implements IStorage {
         logger.warn(
           `[Storage] Mirror "${mirror?.name}" failed ${label}: ${
             r.reason instanceof Error ? r.reason.message : String(r.reason)
-          }`
+          }`,
         );
       }
     });
@@ -131,7 +158,9 @@ export class StorageManager implements IStorage {
     return result;
   }
 
-  async upsertSentContact(input: NewContactInput & ContactUpdate): Promise<void> {
+  async upsertSentContact(
+    input: NewContactInput & ContactUpdate,
+  ): Promise<void> {
     await this.primary.upsertSentContact(input);
     await this.fanOut("upsertSentContact", (s) => s.upsertSentContact(input));
   }
@@ -171,4 +200,12 @@ export function getStorage(): StorageManager {
   return instance;
 }
 
-export type { Contact, ContactStatus, ContactUpdate, NewContactInput, Stats, ListFilter, IStorage } from "./types";
+export type {
+  Contact,
+  ContactStatus,
+  ContactUpdate,
+  NewContactInput,
+  Stats,
+  ListFilter,
+  IStorage,
+} from "./types";

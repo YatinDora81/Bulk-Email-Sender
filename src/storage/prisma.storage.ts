@@ -180,6 +180,8 @@ export class PrismaStorage implements IStorage {
       title: String(d.title ?? ""),
       company: String(d.company ?? ""),
       status: (d.status as ContactStatus) ?? "pending",
+      openCount: d.openCount != null ? Number(d.openCount) : 0,
+      lastOpenedAt: d.lastOpenedAt ? new Date(d.lastOpenedAt as string) : undefined,
       generatedSubject: (d.generatedSubject as string | undefined) ?? undefined,
       generatedBody: (d.generatedBody as string | undefined) ?? undefined,
       sentAt: d.sentAt ? new Date(d.sentAt as string) : undefined,
