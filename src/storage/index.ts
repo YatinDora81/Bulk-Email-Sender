@@ -3,6 +3,7 @@ import { SheetStorage } from "./sheet.storage";
 import { MongoStorage } from "./mongo.storage";
 import { PrismaStorage } from "./prisma.storage";
 import type {
+  BulkInsertResult,
   Contact,
   ContactUpdate,
   IStorage,
@@ -155,6 +156,14 @@ export class StorageManager implements IStorage {
   async insertContact(input: NewContactInput): Promise<UpsertResult> {
     const result = await this.primary.insertContact(input);
     await this.fanOut("insertContact", (s) => s.insertContact(input));
+    return result;
+  }
+
+  async bulkInsertContacts(
+    inputs: NewContactInput[],
+  ): Promise<BulkInsertResult> {
+    const result = await this.primary.bulkInsertContacts(inputs);
+    await this.fanOut("bulkInsertContacts", (s) => s.bulkInsertContacts(inputs));
     return result;
   }
 

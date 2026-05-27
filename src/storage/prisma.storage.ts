@@ -1,5 +1,6 @@
 import { logger } from "../utils/logger";
 import type {
+  BulkInsertResult,
   Contact,
   ContactStatus,
   ContactUpdate,
@@ -15,6 +16,10 @@ type PrismaClientInstance = {
   $connect: () => Promise<void>;
   contact: {
     create: (args: { data: Record<string, unknown> }) => Promise<unknown>;
+    createMany?: (args: {
+      data: Record<string, unknown>[];
+      skipDuplicates?: boolean;
+    }) => Promise<{ count: number }>;
     upsert: (args: {
       where: { email: string };
       create: Record<string, unknown>;
@@ -79,6 +84,39 @@ export class PrismaStorage implements IStorage {
       if (code === "P2002") return { inserted: false };
       throw error;
     }
+  }
+
+  async bulkInsertContacts(
+    inputs: NewContactInput[],
+  ): Promise<BulkInsertResult> {
+    if (inputs.length === 0) return { inserted: 0, skipped: 0 };
+    const prisma = this.require();
+
+    const data = inputs.map((i) => ({
+      sno: i.sno,
+      name: i.name,
+      email: i.email.toLowerCase(),
+      title: i.title,
+      company: i.company,
+      status: "pending",
+    }));
+
+    if (prisma.contact.createMany) {
+      const res = await prisma.contact.createMany({
+        data,
+        skipDuplicates: true,
+      });
+      return { inserted: res.count, skipped: inputs.length - res.count };
+    }
+
+    let inserted = 0;
+    let skipped = 0;
+    for (const input of inputs) {
+      const r = await this.insertContact(input);
+      if (r.inserted) inserted++;
+      else skipped++;
+    }
+    return { inserted, skipped };
   }
 
   async upsertSentContact(input: NewContactInput & ContactUpdate): Promise<void> {

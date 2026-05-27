@@ -58,10 +58,16 @@ export interface UpsertResult {
   inserted: boolean;
 }
 
+export interface BulkInsertResult {
+  inserted: number;
+  skipped: number;
+}
+
 export interface IStorage {
   readonly name: string;
   init(): Promise<void>;
   insertContact(contact: NewContactInput): Promise<UpsertResult>;
+  bulkInsertContacts(contacts: NewContactInput[]): Promise<BulkInsertResult>;
   upsertSentContact(contact: NewContactInput & ContactUpdate): Promise<void>;
   updateContact(email: string, update: ContactUpdate): Promise<void>;
   findContact(email: string): Promise<Contact | null>;

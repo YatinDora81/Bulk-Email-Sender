@@ -7,6 +7,7 @@ import { JWT } from "google-auth-library";
 import { logger } from "../utils/logger";
 import {
   CONTACT_HEADERS,
+  type BulkInsertResult,
   type Contact,
   type ContactUpdate,
   type IStorage,
@@ -23,6 +24,43 @@ const SCOPES = [
 ];
 
 const TAB_NAME = process.env.GOOGLE_SHEET_TAB || "Contacts";
+
+const SHEET_QUOTA_WAIT_MS = 65_000;
+const SHEET_MAX_RETRIES = 5;
+const SHEET_BULK_CHUNK = 500;
+const SHEET_BULK_CHUNK_DELAY_MS = 1100;
+
+function isQuotaError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return /(\b429\b|Quota exceeded|RATE_LIMIT_EXCEEDED|RESOURCE_EXHAUSTED|Too Many Requests)/i.test(
+    msg,
+  );
+}
+
+async function withSheetRetry<T>(
+  label: string,
+  fn: () => Promise<T>,
+  maxRetries: number = SHEET_MAX_RETRIES,
+): Promise<T> {
+  let attempt = 0;
+  let lastError: unknown;
+
+  while (attempt <= maxRetries) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isQuotaError(error)) throw error;
+      attempt++;
+      if (attempt > maxRetries) break;
+      logger.warn(
+        `[Sheet] 429 quota hit on ${label} — waiting ${SHEET_QUOTA_WAIT_MS / 1000}s before retry ${attempt}/${maxRetries}`,
+      );
+      await new Promise((r) => setTimeout(r, SHEET_QUOTA_WAIT_MS));
+    }
+  }
+  throw lastError;
+}
 
 interface CachedRow {
   row: GoogleSpreadsheetRow;
@@ -180,9 +218,78 @@ export class SheetStorage implements IStorage {
       updatedAt: now,
     };
 
-    const row = await sheet.addRow(contactToRow(contact));
+    const row = await withSheetRetry(`addRow(${email})`, () =>
+      sheet.addRow(contactToRow(contact)),
+    );
     this.cache.set(email, { row, contact });
     return { inserted: true };
+  }
+
+  async bulkInsertContacts(
+    inputs: NewContactInput[],
+  ): Promise<BulkInsertResult> {
+    if (inputs.length === 0) return { inserted: 0, skipped: 0 };
+    const sheet = this.requireSheet();
+
+    const queue: { contact: Contact; row: Record<string, string | number> }[] = [];
+    let skipped = 0;
+    const now = new Date();
+    const seen = new Set<string>();
+
+    for (const input of inputs) {
+      const email = input.email.toLowerCase();
+      if (!email || seen.has(email) || this.cache.has(email)) {
+        skipped++;
+        continue;
+      }
+      seen.add(email);
+
+      const contact: Contact = {
+        sno: input.sno,
+        name: input.name,
+        email,
+        title: input.title,
+        company: input.company,
+        status: "pending",
+        openCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      queue.push({ contact, row: contactToRow(contact) });
+    }
+
+    if (queue.length === 0) return { inserted: 0, skipped };
+
+    let inserted = 0;
+    const totalChunks = Math.ceil(queue.length / SHEET_BULK_CHUNK);
+
+    for (let i = 0; i < queue.length; i += SHEET_BULK_CHUNK) {
+      const batch = queue.slice(i, i + SHEET_BULK_CHUNK);
+      const chunkIdx = Math.floor(i / SHEET_BULK_CHUNK) + 1;
+
+      const newRows = await withSheetRetry(
+        `addRows chunk ${chunkIdx}/${totalChunks} (${batch.length} rows)`,
+        () => sheet.addRows(batch.map((b) => b.row)),
+      );
+
+      for (let j = 0; j < newRows.length; j++) {
+        const row = newRows[j];
+        const entry = batch[j];
+        if (!row || !entry) continue;
+        this.cache.set(entry.contact.email, { row, contact: entry.contact });
+      }
+      inserted += newRows.length;
+
+      logger.info(
+        `[Sheet] Bulk insert ${inserted}/${queue.length} (chunk ${chunkIdx}/${totalChunks})`,
+      );
+
+      if (i + SHEET_BULK_CHUNK < queue.length) {
+        await new Promise((r) => setTimeout(r, SHEET_BULK_CHUNK_DELAY_MS));
+      }
+    }
+
+    return { inserted, skipped };
   }
 
   async upsertSentContact(
@@ -218,7 +325,9 @@ export class SheetStorage implements IStorage {
       updatedAt: now,
     };
 
-    const row = await sheet.addRow(contactToRow(contact));
+    const row = await withSheetRetry(`addRow(${email})`, () =>
+      sheet.addRow(contactToRow(contact)),
+    );
     this.cache.set(email, { row, contact });
   }
 
@@ -241,7 +350,7 @@ export class SheetStorage implements IStorage {
     for (const header of CONTACT_HEADERS) {
       cached.row.set(header, String(rowData[header] ?? ""));
     }
-    await cached.row.save();
+    await withSheetRetry(`row.save(${key})`, () => cached.row.save());
     cached.contact = updated;
   }
 
@@ -298,8 +407,10 @@ export class SheetStorage implements IStorage {
   async clearAll(): Promise<number> {
     const sheet = this.requireSheet();
     const count = this.cache.size;
-    await sheet.clear();
-    await sheet.setHeaderRow([...CONTACT_HEADERS]);
+    await withSheetRetry("clear", () => sheet.clear());
+    await withSheetRetry("setHeaderRow", () =>
+      sheet.setHeaderRow([...CONTACT_HEADERS]),
+    );
     this.cache.clear();
     return count;
   }

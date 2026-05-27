@@ -1,6 +1,7 @@
 import { MongoClient, type Collection, type Db } from "mongodb";
 import { logger } from "../utils/logger";
 import type {
+  BulkInsertResult,
   Contact,
   ContactUpdate,
   IStorage,
@@ -67,6 +68,32 @@ export class MongoStorage implements IStorage {
         return { inserted: false };
       }
       throw error;
+    }
+  }
+
+  async bulkInsertContacts(
+    inputs: NewContactInput[],
+  ): Promise<BulkInsertResult> {
+    if (inputs.length === 0) return { inserted: 0, skipped: 0 };
+    const col = this.require();
+    const now = new Date();
+    const docs: MongoContact[] = inputs.map((i) => ({
+      ...i,
+      email: i.email.toLowerCase(),
+      status: "pending",
+      openCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    try {
+      const res = await col.insertMany(docs, { ordered: false });
+      const inserted = res.insertedCount ?? 0;
+      return { inserted, skipped: inputs.length - inserted };
+    } catch (error: unknown) {
+      const err = error as { result?: { insertedCount?: number }; insertedCount?: number };
+      const inserted = err.result?.insertedCount ?? err.insertedCount ?? 0;
+      return { inserted, skipped: inputs.length - inserted };
     }
   }
 

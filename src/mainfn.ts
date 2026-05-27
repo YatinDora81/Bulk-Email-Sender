@@ -63,16 +63,9 @@ async function syncAndFilter(contacts: RawContact[]): Promise<Contact[]> {
 
   const storage = getStorage();
 
-  let inserted = 0;
-  let skippedDuplicate = 0;
+  logger.info(`[Sync] Bulk-upserting ${contacts.length} contacts into storage...`);
 
-  logger.info(`[Sync] Upserting ${contacts.length} contacts into storage...`);
-
-  for (const raw of contacts) {
-    const result = await storage.insertContact(raw);
-    if (result.inserted) inserted++;
-    else skippedDuplicate++;
-  }
+  const { inserted, skipped: skippedDuplicate } = await storage.bulkInsertContacts(contacts);
 
   logger.info(`[Sync] Inserted: ${inserted} new contacts`);
   logger.info(`[Sync] Skipped (already present): ${skippedDuplicate} duplicates`);
