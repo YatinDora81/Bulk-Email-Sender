@@ -23,7 +23,10 @@ const SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
 ];
 
-const TAB_NAME = process.env.GOOGLE_SHEET_TAB || "Contacts";
+function getTabName(): string {
+  const prefix = process.env.STORAGE_NAME_PREFIX || "";
+  return prefix + (process.env.GOOGLE_SHEET_TAB || "Contacts");
+}
 
 const SHEET_QUOTA_WAIT_MS = 65_000;
 const SHEET_MAX_RETRIES = 5;
@@ -145,13 +148,14 @@ export class SheetStorage implements IStorage {
     this.doc = new GoogleSpreadsheet(sheetId, jwt);
     await this.doc.loadInfo();
 
-    let sheet = this.doc.sheetsByTitle[TAB_NAME];
+    const tabName = getTabName();
+    let sheet = this.doc.sheetsByTitle[tabName];
     if (!sheet) {
       sheet = await this.doc.addSheet({
-        title: TAB_NAME,
+        title: tabName,
         headerValues: [...CONTACT_HEADERS],
       });
-      logger.info(`[Sheet] Created tab "${TAB_NAME}"`);
+      logger.info(`[Sheet] Created tab "${tabName}"`);
     } else {
       try {
         await sheet.loadHeaderRow();
@@ -165,7 +169,7 @@ export class SheetStorage implements IStorage {
             });
           }
           await sheet.setHeaderRow([...CONTACT_HEADERS]);
-          logger.info(`[Sheet] Reset header row on "${TAB_NAME}"`);
+          logger.info(`[Sheet] Reset header row on "${tabName}"`);
         }
       } catch {
         if (sheet.columnCount < CONTACT_HEADERS.length) {
@@ -189,7 +193,7 @@ export class SheetStorage implements IStorage {
     }
 
     logger.info(
-      `[Sheet] Loaded ${this.cache.size} contacts from "${TAB_NAME}"`,
+      `[Sheet] Loaded ${this.cache.size} contacts from "${tabName}"`,
     );
     this.initialized = true;
   }

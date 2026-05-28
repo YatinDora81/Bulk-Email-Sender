@@ -13,6 +13,9 @@ Every `bun run …` script in this project, what it does step-by-step, what it t
 | `bun run clear` | Wipe Google Sheet contacts **and** Supabase open-tracking rows |
 | `bun run send` | Read `data.xlsx` → generate emails (Gemini) → send (SMTP) → update sheet |
 | `bun run sync` | Copy `open_count` / `last_opened_at` from Supabase → sheet (`openCount`, `lastOpenedAt`) |
+| `bun run test:clear` | Same as `clear` but on `TEMP_Contacts` tab + `TEMP_email_open_tracking` table |
+| `bun run test:send` | Same as `send` but writes to `TEMP_Contacts` / `TEMP_contacts` / `TEMP_email_open_tracking` |
+| `bun run test:sync` | Same as `sync` but reads `TEMP_email_open_tracking` → `TEMP_Contacts` |
 | `bun run dev` | Start API server with hot reload |
 | `bun run start` | Start API server (production-style, no hot reload) |
 | `bun run check:tracking` | Ping the open-tracking pixel URL (should return 200) |
@@ -29,6 +32,35 @@ bun run send
 # recipients open mail (Gmail: "Display images")
 bun run sync
 ```
+
+---
+
+## Test mode (`test:*` scripts)
+
+All `test:*` commands set `STORAGE_NAME_PREFIX=TEMP_` for the run. Same code path, only storage names change:
+
+| Backend | Prod name | Test name |
+|---------|-----------|-----------|
+| Google Sheet tab | `Contacts` | `TEMP_Contacts` (auto-created) |
+| MongoDB collection | `contacts` | `TEMP_contacts` (auto-created) |
+| Supabase table | `email_open_tracking` | `TEMP_email_open_tracking` |
+| Supabase RPC | `increment_email_open` | `TEMP_increment_email_open` |
+| Pixel URL | `?id=<uuid>` | `?id=<uuid>&t=TEMP_` |
+
+**One-time setup:** apply `supabase/migrations/002_temp_email_open_tracking.sql` in Supabase SQL Editor (or via `setup:supabase`) and redeploy the Edge Function (already done in this repo) so `t=TEMP_` routes to the TEMP RPC.
+
+**Prisma:** test mode is not supported on Prisma (model name is fixed at compile time). Test mode mirrors land in prod tables for the `prisma` backend. Use `sheet`/`mongo` for test runs.
+
+**Typical test loop:**
+
+```bash
+bun run test:clear
+bun run test:send       # writes to TEMP_Contacts only
+# open pixel in test inbox (loads /track-open?id=...&t=TEMP_)
+bun run test:sync       # updates TEMP_Contacts openCount/lastOpenedAt
+```
+
+Production data stays untouched.
 
 ---
 

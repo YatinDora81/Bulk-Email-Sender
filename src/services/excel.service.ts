@@ -9,8 +9,15 @@ export interface RawContact {
   company: string;
 }
 
+/** Picks the input Excel file based on STORAGE_NAME_PREFIX / EXCEL_FILE env. */
+export function getExcelFileName(): string {
+  const explicit = process.env.EXCEL_FILE?.trim();
+  if (explicit) return explicit;
+  return process.env.STORAGE_NAME_PREFIX ? "data-temp.xlsx" : "data.xlsx";
+}
+
 export function parseExcelFile(filename?: string): RawContact[] {
-  const filePath = path.join(process.cwd(), filename || "data.xlsx");
+  const filePath = path.join(process.cwd(), filename || getExcelFileName());
   const workbook = XLSX.readFile(filePath);
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) throw new Error("No sheets found in Excel file");

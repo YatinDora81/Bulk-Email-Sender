@@ -4,7 +4,7 @@ import { getGemini } from "./config/gemini";
 import { verifySmtp } from "./config/mailer";
 import { sendTrackedEmail } from "./services/tracked-email.service";
 import { checkTrackingPixelEndpoint, isSupabaseTrackingEnabled } from "./tracking/supabase";
-import { parseExcelFile, type RawContact } from "./services/excel.service";
+import { getExcelFileName, parseExcelFile, type RawContact } from "./services/excel.service";
 import { EMAIL_SYSTEM_PROMPT, buildEmailPrompt } from "./utils/prompt";
 import { logger } from "./utils/logger";
 
@@ -40,7 +40,8 @@ function loadData(): RawContact[] {
   divider("STEP 1 — LOADING EXCEL DATA");
   const stepStart = Date.now();
 
-  logger.info("[Load] Reading data.xlsx from project root...");
+  const excelFile = getExcelFileName();
+  logger.info(`[Load] Reading ${excelFile} from project root...`);
   const contacts = parseExcelFile();
   logger.info(`[Load] Parsed ${contacts.length} contacts from Excel`);
   if (contacts[0]) {

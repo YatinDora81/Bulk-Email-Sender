@@ -1,6 +1,7 @@
 import { sendEmail } from "../config/mailer";
 import { logger } from "../utils/logger";
 import { injectOpenPixel } from "../utils/email-tracking";
+import { injectUtmTracking } from "../utils/utm-tracking";
 import {
   createMessageId,
   isSupabaseTrackingEnabled,
@@ -12,9 +13,14 @@ export interface TrackedSendResult {
   trackingEnabled: boolean;
 }
 
+function isUtmTrackingEnabled(): boolean {
+  return process.env.UTM_TRACKING_ENABLED !== "false";
+}
+
 /**
  * Sends email via SMTP. When Supabase tracking is configured, registers a row
  * and injects an open pixel (handled by Supabase Edge Function — no local server needed).
+ * Always rewrites portfolio links with UTM parameters + recipient identifier (base64 email).
  */
 export async function sendTrackedEmail(params: {
   to: string;
@@ -23,17 +29,29 @@ export async function sendTrackedEmail(params: {
 }): Promise<TrackedSendResult> {
   let html = params.html;
 
-  if (!isSupabaseTrackingEnabled()) {
-    await sendEmail(params);
-    return { trackingEnabled: false };
+  const trackingOn = isSupabaseTrackingEnabled();
+  const utmOn = isUtmTrackingEnabled();
+  let messageId: string | undefined;
+
+  if (trackingOn) {
+    messageId = createMessageId();
+    await registerOpenTracking(messageId, params.to);
+    html = injectOpenPixel(html, messageId);
   }
 
-  const messageId = createMessageId();
-  await registerOpenTracking(messageId, params.to);
-  html = injectOpenPixel(html, messageId);
+  if (utmOn) {
+    html = injectUtmTracking(html, params.to, messageId);
+  }
 
   await sendEmail({ ...params, html });
-  logger.info(`[Tracking] Sent with open pixel — messageId=${messageId} → ${params.to}`);
 
-  return { messageId, trackingEnabled: true };
+  if (trackingOn) {
+    logger.info(
+      `[Tracking] Sent with open pixel + UTM — messageId=${messageId} → ${params.to}`,
+    );
+  } else if (utmOn) {
+    logger.info(`[Tracking] Sent with UTM only → ${params.to}`);
+  }
+
+  return { messageId, trackingEnabled: trackingOn };
 }

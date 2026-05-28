@@ -34,10 +34,11 @@ export class MongoStorage implements IStorage {
     this.client = new MongoClient(uri);
     await this.client.connect();
     this.db = this.client.db();
-    this.col = this.db.collection<MongoContact>("contacts");
+    const collectionName = (process.env.STORAGE_NAME_PREFIX || "") + "contacts";
+    this.col = this.db.collection<MongoContact>(collectionName);
     await this.col.createIndex({ email: 1 }, { unique: true });
     await this.col.createIndex({ status: 1 });
-    logger.info("[Mongo] Connected");
+    logger.info(`[Mongo] Connected (collection: ${collectionName})`);
   }
 
   private require(): Collection<MongoContact> {

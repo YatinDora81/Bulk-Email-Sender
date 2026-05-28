@@ -12,7 +12,7 @@ async function clearDb() {
 
   if (isSupabaseTrackingEnabled()) {
     const trackingDeleted = await clearAllOpenTracking();
-    logger.info(`[ClearDB] Cleared ${trackingDeleted} rows from Supabase email_open_tracking`);
+    logger.info(`[ClearDB] Cleared ${trackingDeleted} rows from Supabase tracking table`);
   } else {
     logger.info("[ClearDB] Supabase tracking skipped (not configured)");
   }

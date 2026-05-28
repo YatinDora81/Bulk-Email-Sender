@@ -19,21 +19,27 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const messageId = url.searchParams.get("id");
+  const prefix = url.searchParams.get("t") || "";
 
   if (!messageId) {
     return new Response("Missing id", { status: 400, headers: corsHeaders });
   }
+
+  // Whitelist allowed prefixes so callers can't probe arbitrary functions.
+  const allowedPrefixes = ["", "TEMP_"];
+  const safePrefix = allowedPrefixes.includes(prefix) ? prefix : "";
+  const rpcName = safePrefix ? `${safePrefix}increment_email_open` : "increment_email_open";
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
   if (supabaseUrl && serviceKey) {
     const supabase = createClient(supabaseUrl, serviceKey);
-    const { error } = await supabase.rpc("increment_email_open", {
+    const { error } = await supabase.rpc(rpcName, {
       p_message_id: messageId,
     });
     if (error) {
-      console.error("[track-open] increment failed:", error.message);
+      console.error(`[track-open] increment failed (${rpcName}):`, error.message);
     }
   }
 
